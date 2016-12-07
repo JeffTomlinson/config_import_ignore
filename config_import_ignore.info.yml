@@ -1,0 +1,7 @@
+name: Configuration Import Ignore
+type: module
+description: Allows configuration entities to be ignored during configuration imports.
+core: 8.x
+package: Configuration Management
+dependencies:
+  - config

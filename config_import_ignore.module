@@ -1,0 +1,96 @@
+<?php
+
+/**
+ * @file
+ * Adds configuration import ignore settings and UI elements to config entities.
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\config_import_ignore\Config\ConfigImportIgnoreConfigImporter;
+
+/**
+ * Implements hook_help().
+ */
+function config_import_ignore_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    // Main module help for the config_import_ignore module.
+    case 'help.page.config_import_ignore':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('Allows configuration entities to be ignored during configuration imports.') . '</p>';
+      return $output;
+
+    default:
+  }
+}
+
+/**
+ * Implements hook_config_import_steps_alter().
+ */
+function config_import_ignore_config_import_steps_alter(&$sync_steps, ConfigImportIgnoreConfigImporter $config_importer) {
+  // Add a sync step for processing ignored configurations.
+  $sync_steps[] = 'processIgnored';
+}
+
+/**
+ * Form elements for adding configuration import ignore settings to a form.
+ *
+ * @param array $form
+ *   A form API form.
+ * @param \Drupal\Core\Form\FormStateInterface $form_state
+ *   A form API form state object.
+ */
+function config_import_ignore_form_add_settings(&$form, FormStateInterface &$form_state) {
+  if (method_exists($form_state, 'getFormObject')
+    && method_exists($form_state->getFormObject(), 'getEntity')) {
+    $entity = $form_state->getFormObject()->getEntity();
+
+    // Config entities will have uuid and dependencies properties.
+    if (property_exists($entity, 'uuid') && property_exists($entity, 'dependencies')) {
+      // Check permissions.
+      if (\Drupal::currentUser()
+        ->hasPermission('entity form configuration management')
+      ) {
+        $settings = $entity->getThirdPartySetting('config_import_ignore', 'import_ignore', []);
+        $ops = ['create', 'update', 'rename', 'delete'];
+        // Add config import ignore settings fields to the form.
+        $form['import_ignore'] = [
+          '#type' => 'details',
+          '#title' => t('Configuration management'),
+          '#collapsible' => TRUE,
+          '#collapsed' => TRUE,
+          '#tree' => TRUE,
+        ];
+
+        // Create checkboxes for each import operation.
+        foreach ($ops as $op) {
+          $form['import_ignore'][$op] = [
+            '#type' => 'checkbox',
+            '#title' => t('Ignore @op', array('@op' => $op)),
+            '#description' => t("Don't @op this entity when importing configuration.", array('@op' => $op)),
+            '#default_value' => (isset($settings[$op]) && $settings[$op] === 1) ? 1 : 0,
+          ];
+        }
+
+        // Add a submit handler.
+        $form['actions']['submit']['#submit'][] = 'config_import_ignore_form_add_settings_submit';
+      }
+    }
+  }
+}
+
+/**
+ * Submit handler for config_import_ignore_form_add_settings().
+ *
+ * @param array $form
+ *   A Drupal node form array.
+ * @param FormStateInterface $form_state
+ *   The node form form state.
+ */
+function config_import_ignore_form_add_settings_submit($form, FormStateInterface $form_state) {
+  $entity = $form_state->getFormObject()->getEntity();
+  $ignoreSettings = $form_state->getValue('import_ignore');
+  $entity->setThirdPartySetting('config_import_ignore', 'import_ignore', $ignoreSettings);
+  $entity->save();
+}
